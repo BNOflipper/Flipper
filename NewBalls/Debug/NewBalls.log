@@ -1,0 +1,11 @@
+﻿  main.cpp
+c:\users\norde\desktop\opengl\newballs\newballs\source\flipper.h(63): warning C4018: '<': signed/unsigned mismatch
+c:\users\norde\desktop\opengl\newballs\newballs\source\flipper.h(85): warning C4018: '<': signed/unsigned mismatch
+c:\users\norde\desktop\opengl\newballs\newballs\source\flipper.h(111): warning C4018: '<': signed/unsigned mismatch
+c:\users\norde\desktop\opengl\newballs\newballs\source\flipper.h(119): warning C4018: '<': signed/unsigned mismatch
+c:\users\norde\desktop\opengl\newballs\newballs\source\flipper.h(192): warning C4101: 'Y0': unreferenced local variable
+c:\users\norde\desktop\opengl\newballs\newballs\source\flipper.h(291): warning C4244: '=': conversion from 'double' to 'GLfloat', possible loss of data
+c:\users\norde\desktop\opengl\newballs\newballs\source\main.cpp(15): warning C4305: 'initializing': truncation from 'double' to 'GLfloat'
+c:\users\norde\desktop\opengl\newballs\newballs\source\main.cpp(133): warning C4244: 'argument': conversion from 'const GLfloat' to 'int', possible loss of data
+c:\users\norde\desktop\opengl\newballs\newballs\source\main.cpp(200): warning C4305: 'argument': truncation from 'double' to 'GLclampf'
+  NewBalls.vcxproj -> C:\Users\Norde\Desktop\OpenGL\NewBalls\Debug\NewBalls.exe
