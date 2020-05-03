@@ -8,6 +8,8 @@
 #include "Menu.h"
 #include "ShaderUtil.h"
 #include <iostream>
+#include <ft2build.h>
+#include FT_FREETYPE_H 
 
 constexpr auto X_INIT = 0.2f;
 constexpr auto Y_INIT = 0.8f;
@@ -22,7 +24,6 @@ clock_t t, ts;
 using namespace Const;
 
 Ball ball(X_INIT, Y_INIT, 0.0f, 0.0f, 0.1f, 5.0f, 0.01f, 0.6f);
-// GLfloat dAxleTip, GLfloat r_left, GLfloat r_right, GLfloat x_axle, GLfloat y_axle, bool clockwise, GLuint numberOfSides
 flipper left(0.7f, 0.1f, 0.05f, -0.9f, -0.9f, false, 10);
 flipper right(0.7f, 0.1f, 0.05f, 0.9f, -0.9f, true, 10);
 Menu menu(NONE);
@@ -153,8 +154,10 @@ int main(void)
 		return EXIT_FAILURE;
 	}
 
+	// Shader
 	ShaderUtil shaderUtil;
 	shaderUtil.Load("shaders/vs400.shader", "shaders/fs400.shader");
+	shaderUtil.Use();
 
 	GLuint ballVBO, ballVAO,
 		   leftAxleVAO, leftAxleVBO, left4PointVAO, left4PointVBO, leftTipVAO, leftTipVBO, 
@@ -173,7 +176,6 @@ int main(void)
 	glGenBuffers(1, &right4PointVBO);
 	glGenVertexArrays(1, &rightTipVAO);
 	glGenBuffers(1, &rightTipVBO);
-	shaderUtil.Use();
 
 	GLfloat *circleVerticesPtr;
 	GLfloat circleVertices[Npins][2 * numberOfSides + 4];
