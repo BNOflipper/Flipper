@@ -1,55 +1,69 @@
 #pragma once
-#include <GL/glew.h>
+#include <glad/glad.h>
 #include "Draw.h"
 #include <math.h>
 #include "constants.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 using namespace Const;
 
-class flipper 
+class flipper
 {
-	GLfloat x;
-	GLfloat xTip;
-	GLfloat y;
-	GLfloat yTip;
-	GLfloat r;
-	GLfloat rTip;
-	GLfloat d;
+	GLfloat x_axle;
+	GLfloat y_axle;
+	GLfloat r_axle;
+	GLfloat x_tip;
+	GLfloat y_tip;
+	GLfloat r_tip;
+	GLfloat dAxleTip;
 	GLfloat angle;
 	GLfloat angleSpeed;
-	GLfloat e;
+	GLfloat angleMax;
+	GLfloat angleMin;
 	GLfloat axleVertices[100];
 	GLfloat middleVertices[8];
 	GLfloat tipVertices[100];
+	GLfloat globalAxleVertices[100];
+	GLfloat globalMiddleVertices[8];
+	GLfloat globalTipVertices[100];
+	GLfloat displacements;
 	GLuint nSides;
 	GLuint nVertices;
-	bool clockWise;
+	glm::vec2 closestNormal;
+	glm::vec2 normal[2];
+	glm::vec2 origo[2];
+	glm::vec2 surfaces[2];
 	bool moving;
+	bool hit;
 
 public:
-	flipper(GLfloat dAxleTip, GLfloat r_left, GLfloat r_right, GLfloat x_axle, GLfloat y_axle, bool clockwise, GLuint numberOfSides)
+	flipper(GLfloat dAxleTip, GLfloat max_thickness, GLfloat min_thickness,
+		    GLfloat x_axle, GLfloat y_axle, GLfloat angle_init, GLuint numberOfSides)
 	{
-		x = x_axle;
-		y = y_axle;
-		yTip = y_axle;
-		r = r_left;
-		rTip = r_right;
-		d = dAxleTip;
+		this->x_axle = x_axle;
+		this->y_axle = y_axle;
+		r_axle = max_thickness / 2.0f;
+		r_tip = min_thickness / 2.0f;
+		this->dAxleTip = dAxleTip;
 		angleSpeed = 0;
-		moving = false;
-		clockWise = clockwise;
-		e = getEdge();
+		angle = angle_init;
 		nSides = numberOfSides;
+		x_tip = x_axle + dAxleTip * cos(angle_init);
+		y_tip = y_axle + dAxleTip * sin(angle_init);
+		moving = false;
+		hit = false;
 
-		if (clockwise)
+		if (angle_init < halfPi)
 		{
-			angle = Pi;
-			xTip = x - d;
+			angleMin = angle_init;
+			angleMax = angle_init + Pi / 4.0f;
 		}
 		else
 		{
-			angle = 0;
-			xTip = x + d;
+			angleMax = angle_init;
+			angleMin = angle_init - Pi / 4.0f;
 		}
 
 		nVertices = nSides + 2;
@@ -58,77 +72,59 @@ public:
 		axleVertices[0] = 0.0f;
 		axleVertices[1] = 0.0f;
 		axleVertices[2] = 0.0f;
-		axleVertices[3] = r;
+		axleVertices[3] = r_axle;
 
 		for (int i = 2; i < nVertices; i++)
 		{
-			axleVertices[2 * i] = r * cos(halfPi + i * Pi / nSides);
-			axleVertices[2 * i + 1] = r * sin(halfPi + i * Pi / nSides);
+			axleVertices[2 * i] = r_axle * cos(halfPi + i * Pi / nSides);
+			axleVertices[2 * i + 1] = r_axle * sin(halfPi + i * Pi / nSides);
 		}
 
 		// Define middle frame verticess
 		middleVertices[0] = 0.0f;
-		middleVertices[1] = r;
-		middleVertices[2] = d;
-		middleVertices[3] = rTip;
-		middleVertices[4] = d;
-		middleVertices[5] = -rTip;
+		middleVertices[1] = r_axle;
+		middleVertices[2] = dAxleTip;
+		middleVertices[3] = r_tip;
+		middleVertices[4] = dAxleTip;
+		middleVertices[5] = -r_tip;
 		middleVertices[6] = 0.0f;
-		middleVertices[7] = -r;
+		middleVertices[7] = -r_axle;
 
 		// Define vertices for tip half circle
 		tipVertices[0] = 0.0f;
 		tipVertices[1] = 0.0f;
 		tipVertices[2] = 0.0f;
-		tipVertices[3] = -rTip;
+		tipVertices[3] = -r_tip;
 
 		for (int i = 2; i < nVertices; i++)
 		{
-			tipVertices[2 * i] = rTip * cos(-halfPi + i * Pi / nSides);
-			tipVertices[2 * i + 1] = rTip * sin(-halfPi + i * Pi / nSides);
+			tipVertices[2 * i] = r_tip * cos(-halfPi + i * Pi / nSides);
+			tipVertices[2 * i + 1] = r_tip * sin(-halfPi + i * Pi / nSides);
 		}
+
+		updateVertices();
 	}
 
 	GLfloat *  Get4PointsVertices()
 	{
-		static GLfloat vertices[8];
-
-		for (int i = 0; i < 4; i++)
-		{
-			vertices[2 * i] = x + middleVertices[2 * i] * cos(angle) - middleVertices[2 * i + 1] * sin(angle);
-			vertices[2 * i + 1] = y + middleVertices[2 * i] * sin(angle) + middleVertices[2 * i + 1] * cos(angle);
-		}
-
-		return vertices;
+		return globalMiddleVertices;
 	}
 
 	GLfloat * GetPartCircleVertices(bool select)
 	{
-		static GLfloat vertices[100];
-
 		if (select)
 		{
-			for (int i = 0; i < nVertices; i++)
-			{
-				vertices[2 * i] = x + axleVertices[2 * i] * cos(angle) - axleVertices[2 * i + 1] * sin(angle);
-				vertices[2 * i + 1] = y + axleVertices[2 * i] * sin(angle) + axleVertices[2 * i + 1] * cos(angle);
-			}
+			return globalAxleVertices;
 		}
 		else
 		{
-			for (int i = 0; i < nVertices; i++)
-			{
-				vertices[2 * i] = xTip + tipVertices[2 * i] * cos(angle) - tipVertices[2 * i + 1] * sin(angle);
-				vertices[2 * i + 1] = yTip + tipVertices[2 * i] * sin(angle) + tipVertices[2 * i + 1] * cos(angle);
-			}
+			return globalTipVertices;
 		}
-
-		return vertices;
 	}
 
     void flip()
 	{
-		if (!clockWise)
+		if (angle < Pi / 4.0f)
 		{
 			angleSpeed = (Pi / 4.0f - angle) * 20.0f;
 		}
@@ -136,16 +132,17 @@ public:
 		{
 			angleSpeed = (3.0f * Pi / 4.0f - angle) * 20.0f;
 		}
+
 		moving = true;
 	}
 
-	void updateFlip(bool flipperHit)
+	void updateFlip()
 	{
 		if (moving)
 		{
 			GLfloat angleAcc = -0.05f * copysign(1.0f, cos(angle));
 
-			if (!flipperHit)
+			if (!hit)
 			{
 				angleSpeed += angleAcc;
 			}
@@ -154,148 +151,117 @@ public:
 				angleSpeed += 10 * angleAcc;
 			}
 
-			if (angle < 0.0f || angle > Pi)
+			angle += Ts * angleSpeed;
+
+			if (angle > angleMax)
 			{
+				angle = angleMax;
 				angleSpeed = 0.0f;
-				moving = false;
-				if (!clockWise)
-				{
-					angle = 0.0f;
-				}
-				else
-				{
-					angle = Pi;
-				}
 			}
-			else
+			else if (angle < angleMin)
 			{
-				angle += Ts * angleSpeed;
-				if (angle > Pi / 4.0f && !clockWise)
-				{
-					angle = Pi / 4.0f;
-					angleSpeed = 0.0f;
-				}
-				else if (angle < 3.0f * Pi / 4.0f && clockWise)
-				{
-					angle = 3.0f * Pi / 4.0f;
-					angleSpeed = 0.0f;
-				}
+				angle = angleMin;
+				angleSpeed = 0.0f;
 			}
 
-			xTip = x + d * cos(angle);
-			yTip = y + d * sin(angle);
+			updateVertices();
 		}
 	}
 
-	GLfloat getDistance(GLfloat x_in, GLfloat y_in)
+	void updateVertices()
 	{
-		GLfloat K, Y0, angleTip, xMin, distance, dx, y0;
-		e = getEdge();
+		x_tip = x_axle + dAxleTip * cos(angle);
+		y_tip = y_axle + dAxleTip * sin(angle);
 
-		if (!clockWise && (x_in < e))
+		for (int i = 0; i < 4; i++)
 		{
-			dx = x_in - x;
-			y0 = y + r;
-
-			if (x_in < e - rTip * cos(angle))
-			{
-			    K = (yTip + rTip - y0) / d;
-				xMin = (dx + K * (y_in - y0)) / (powf(K, 2.0f) + 1.0f);
-				distance = sqrt(powf(dx - xMin, 2.0f) + powf(y_in - K * xMin - y0, 2.0f));
-			}
-			else
-			{
-				angleTip = atan2(y_in - yTip, x_in - xTip);
-				distance = sqrt(pow(xTip + rTip * cos(angleTip) - x_in, 2.0f) + pow(yTip + rTip * sin(angleTip) - y_in, 2.0f));
-			}
-		}
-		else if (clockWise && (x_in > e))
-		{
-			dx = x_in - xTip;
-			y0 = yTip + rTip;
-
-			if (x_in > e - rTip * cos(angle))
-			{
-				K = (y + r - y0) / d;
-				xMin = (dx + K * (y_in - y0)) / (powf(K, 2.0f) + 1.0f);
-				distance = sqrt(powf(dx - xMin, 2.0f) + powf(y_in - K * xMin - y0, 2.0f));
-			}
-			else
-			{
-				angleTip = atan2(y_in - yTip, x_in - xTip);
-				distance = sqrt(pow(xTip + rTip * cos(angleTip) - x_in, 2.0f) + pow(yTip + rTip * sin(angleTip) - y_in, 2.0f));
-			}
-		}
-		else
-		{
-			distance = 1.0f;
+			globalMiddleVertices[2 * i] = x_axle + middleVertices[2 * i] * cos(angle) - middleVertices[2 * i + 1] * sin(angle);
+			globalMiddleVertices[2 * i + 1] = y_axle + middleVertices[2 * i] * sin(angle) + middleVertices[2 * i + 1] * cos(angle);
 		}
 
-		return distance;
+		for (int i = 0; i < nVertices; i++)
+		{
+			globalAxleVertices[2 * i] = x_axle + axleVertices[2 * i] * cos(angle) - axleVertices[2 * i + 1] * sin(angle);
+			globalAxleVertices[2 * i + 1] = y_axle + axleVertices[2 * i] * sin(angle) + axleVertices[2 * i + 1] * cos(angle);
+		}
+
+		for (int i = 0; i < nVertices; i++)
+		{
+			globalTipVertices[2 * i] = x_tip + tipVertices[2 * i] * cos(angle) - tipVertices[2 * i + 1] * sin(angle);
+			globalTipVertices[2 * i + 1] = y_tip + tipVertices[2 * i] * sin(angle) + tipVertices[2 * i + 1] * cos(angle);
+		}
+
+		origo[0] = glm::vec2(globalMiddleVertices[0], globalMiddleVertices[1]);
+		origo[1] = glm::vec2(globalMiddleVertices[6], globalMiddleVertices[7]);
+
+		surfaces[0] = glm::vec2(globalMiddleVertices[2] - origo[0].x, globalMiddleVertices[3] - origo[0].y);
+		surfaces[1] = glm::vec2(globalMiddleVertices[4] - origo[1].x, globalMiddleVertices[5] - origo[1].y);
+
+		normal[0] = glm::normalize(glm::vec2(-surfaces[0].y, surfaces[0].x));
+		normal[1] = glm::normalize(glm::vec2(surfaces[1].y, -surfaces[1].x));
 	}
 
-	GLfloat getAngle(GLfloat x_in, GLfloat y_in)
+	bool FlipperCollisionDetect(GLfloat x_in, GLfloat y_in, GLfloat min_distance)
 	{
-		GLfloat halfPi = Pi / 2.0f;
-		GLfloat angleSurf, angleImpact;
-		if (((x_in < e - rTip * cos(angle)) && !clockWise) || ((x_in > e + rTip * cos(angle)) && clockWise))
+		for (int i = 0; i < 2; i++)
 		{
-			angleSurf = atan2(yTip + rTip - y - r, xTip - x);
-			if (angleSurf >= -halfPi && angleSurf <= halfPi)
+			glm::vec2 localVector(x_in - origo[i].x, y_in - origo[i].y);
+			GLfloat surfPosition = glm::dot(surfaces[i], localVector) / dAxleTip;
+
+			if (surfPosition < dAxleTip && surfPosition > 0)
 			{
-				angleImpact = angleSurf + halfPi;
-			}
-			else if (angleSurf > halfPi)
-			{
-				angleImpact = angleSurf - halfPi;
-			}
-			else
-			{
-				angleImpact = angleSurf + 3.0f * halfPi;
-			}
-			/*else
-			{
-				angleSurf = atan2(yTip - rTip - y + r, xTip - x);
-				if (angleSurf >= -halfPi && angleSurf <= halfPi)
+				GLfloat distance = abs(glm::dot(normal[i], localVector));
+
+				if (distance < min_distance)
 				{
-					angleImpact = angleSurf - halfPi;
+					closestNormal = normal[i];
+					displacements = min_distance - distance + 0.001f;
+					hit = true;
+					return true;
 				}
-				else if (angleSurf > halfPi)
-				{
-					angleImpact = angleSurf - 3 * halfPi;
-				}
-				else
-				{
-					angleImpact = angleSurf - halfPi;;
-				}
-			}*/
-		}
-		else
-		{
-			angleImpact = atan2(y_in - yTip, x_in - xTip);
+			}
 		}
 
-		return angleImpact;
+		glm::vec2 normalTip(x_in - x_tip, y_in - y_tip);
+		GLfloat normalLength = glm::length(normalTip);
+
+		if (glm::length(normalTip) < min_distance + r_tip)
+		{
+			closestNormal = glm::normalize(normalTip);
+			displacements = r_tip + min_distance - normalLength + 0.001f;
+			hit = true;
+			return true;
+		}
+
+		hit = false;
+		return false;
 	}
 
 	GLfloat getImpulse(GLfloat x_bounce, GLfloat y_bounce)
 	{
 		GLfloat I;
 		GLfloat dAxle;
-		if (((angleSpeed < 2.0) && !clockWise) || ((angleSpeed > -2.0f) && clockWise))
+
+		if (((angleSpeed < 0.0f) && angle < halfPi) || ((angleSpeed > 0.0f) && angle > halfPi))
 		{
 			I = 0;
 		}
 		else
 		{
-			dAxle = sqrt(pow(fabs(x_bounce - x), 2.0) + pow(fabs(y_bounce - y), 2.0));
-			I = dAxle * 0.00001f * fabs(angleSpeed);
+			dAxle = sqrt(pow(fabs(x_bounce - x_axle), 2.0) + pow(fabs(y_bounce - y_axle), 2.0));
+			I = 5.0f * dAxle * fabs(angleSpeed);
 		}
+
 		return I;
 	}
 
-	GLfloat getEdge()
+	glm::vec2 getNormal()
 	{
-		return xTip + rTip * cos(angle);
+		return closestNormal;
+	}
+
+	GLfloat getDisplacement()
+	{
+		return displacements;
 	}
 };

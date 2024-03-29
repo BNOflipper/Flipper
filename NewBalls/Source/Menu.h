@@ -1,5 +1,5 @@
 #pragma once
-#include <GL/glew.h>
+#include <glad/glad.h>
 #include "Draw.h"
 #include <math.h>
 #include "constants.h"
@@ -86,7 +86,7 @@ public:
 		}
 	}
 
-	void Draw(ShaderUtil& s)
+	/*void Draw()
 	{
 		GLfloat x = SCREEN_WIDTH / 4.0f;
 		GLfloat width = SCREEN_WIDTH / 2.0f;;
@@ -115,8 +115,8 @@ public:
 				break;
 		}
 		
-		drawFrame(x, 3 * hight + 2 * spacing, width, hight, playBtnFrame, s);
-		drawFrame(x, 2 * hight + spacing, width, hight, highScoreBtnFrame, s);
-		drawFrame(x, hight, width, hight, exitBtnFrame, s);
-	}
+		drawFrame(x, 3 * hight + 2 * spacing, width, hight, playBtnFrame);
+		drawFrame(x, 2 * hight + spacing, width, hight, highScoreBtnFrame);
+		drawFrame(x, hight, width, hight, exitBtnFrame);
+	}*/
 };

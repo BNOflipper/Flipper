@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\shaders">
+      <UniqueIdentifier>{10962d57-575b-4fc3-b7cc-1b6aa001374b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\ball.h">
@@ -30,7 +33,10 @@
     <ClInclude Include="Source\Menu.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Source\ShaderUtil.h">
+    <ClInclude Include="Source\shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Text.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -38,7 +44,7 @@
     <ClCompile Include="Source\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\ShaderUtil.cpp">
+    <ClCompile Include="Source\glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -46,5 +52,19 @@
     <ResourceCompile Include="Source\NewBalls.rc">
       <Filter>Header Files\Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\vs330.shader">
+      <Filter>Header Files\shaders</Filter>
+    </None>
+    <None Include="shaders\fs330.shader">
+      <Filter>Header Files\shaders</Filter>
+    </None>
+    <None Include="shaders\fsText.shader">
+      <Filter>Header Files\shaders</Filter>
+    </None>
+    <None Include="shaders\vsText.shader">
+      <Filter>Header Files\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

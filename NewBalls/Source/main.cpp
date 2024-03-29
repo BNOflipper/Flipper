@@ -1,18 +1,26 @@
-#include <GL/glew.h>
+#pragma once
+#include <iostream>
+#include <map>
+#include <string>
 #include <GLFW/glfw3.h>
+#include <glad/glad.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <math.h>
+#include "Draw.h"
 #include <time.h>
 #include "ball.h"
 #include "flipper.h"
 #include "constants.h"
 #include "Menu.h"
-#include "ShaderUtil.h"
-#include <iostream>
-#include <ft2build.h>
-#include FT_FREETYPE_H 
+#include "shader.h"
+#include "Text.h"
 
 constexpr auto X_INIT = 0.2f;
 constexpr auto Y_INIT = 0.8f;
+const GLfloat SCREEN_HEIGHT(800.0f);
+const GLfloat SCREEN_WIDTH(800.0f);
 
 GLfloat xAdj = 0.02;
 GLfloat Tfps = 1.0f / 60.0f;
@@ -22,14 +30,14 @@ GLfloat d = 0;
 clock_t t, ts;
 
 using namespace Const;
+int const numberOfSides = 20;
 
-Ball ball(X_INIT, Y_INIT, 0.0f, 0.0f, 0.1f, 5.0f, 0.01f, 0.6f);
-flipper left(0.7f, 0.1f, 0.05f, -0.9f, -0.9f, false, 10);
-flipper right(0.7f, 0.1f, 0.05f, 0.9f, -0.9f, true, 10);
+Ball ball(X_INIT, Y_INIT, 0.0f, 0.0f, 0.1f, 5.0f, 0.1f, 0.9f, numberOfSides);
+flipper left(0.7f, 0.2f, 0.05f, -0.9f, -0.9f, 0, 10);
+flipper right(0.7f, 0.2f, 0.05f, 0.9f, -0.9f, Pi, 10);
 Menu menu(NONE);
 
 int const Npins = 12;
-int const numberOfSides = 20;
 GLfloat pinR = 0.05f;
 
 GLfloat pins[Npins][2] = 
@@ -39,32 +47,15 @@ GLfloat pins[Npins][2] =
 	{ -0.9f, -0.2f, },{ -0.3f, -0.2f },{ 0.3f, -0.2f },{ 0.9f, -0.2f }
 };
 
-void Render(GLfloat vertices[], GLuint drawmode, GLuint VAO, GLuint VBO, GLuint N)
+GLuint ballVBO, ballVAO,
+	   leftAxleVAO, leftAxleVBO, left4PointVAO, left4PointVBO, leftTipVAO, leftTipVBO,
+	   rightAxleVAO, rightAxleVBO, right4PointVAO, right4PointVBO, rightTipVAO, rightTipVBO;
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-	glBindVertexArray(VAO);
-
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, 2 * N * sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), (GLvoid *)0);
-	glEnableVertexAttribArray(0);
-
-	switch (drawmode)
-	{
-		case 0:
-			glDrawArrays(GL_TRIANGLE_FAN, 0, N);
-			break;
-		case 1:
-			glDrawArrays(GL_TRIANGLES, 0, N);
-			break;
-		case 2:
-			glDrawArrays(GL_QUADS, 0, N);
-			break;
-		default:
-			break;
-	}
-
-	glBindVertexArray(0);
+	// make sure the viewport matches the new window dimensions; note that width and 
+	// height will be significantly larger than specified on retina displays.
+	glViewport(0, 0, width, height);
 }
 
 void keyBoard(GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -128,14 +119,13 @@ int main(void)
 {
 	// Init GLFW
 	glfwInit();
-	fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// Create a GLFWwindow object that we can use for GLFW's functions
 	GLFWwindow *window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Flipper", nullptr, nullptr);
 	glfwSetKeyCallback(window, keyBoard);
-
-	int screenWidth, screenHeight;
-	glfwGetFramebufferSize(window, &screenWidth, &screenHeight);
 
 	if (nullptr == window)
 	{
@@ -146,22 +136,32 @@ int main(void)
 	}
 
 	glfwMakeContextCurrent(window);
+	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-	// Initialize GLEW to setup the OpenGL Function pointers
-	if (GLEW_OK != glewInit())
+	// glad: load all OpenGL function pointers
+	// ---------------------------------------
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
-		std::cout << "Failed to initialize GLEW" << std::endl;
-		return EXIT_FAILURE;
+		std::cout << "Failed to initialize GLAD" << std::endl;
+		return -1;
 	}
 
-	// Shader
-	ShaderUtil shaderUtil;
-	shaderUtil.Load("shaders/vs400.shader", "shaders/fs400.shader");
-	shaderUtil.Use();
+	// build and compile our shader program
+	// ------------------------------------
+	Shader textShader("shaders/vsText.shader", "shaders/fsText.shader");
+	glm::mat4 projection = glm::ortho(0.0f, static_cast<float>(SCREEN_WIDTH), 0.0f, static_cast<float>(SCREEN_HEIGHT));
+	textShader.use();
+	glUniformMatrix4fv(glGetUniformLocation(textShader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	initFreeType();
+	Shader ourShader("shaders/vs330.shader", "shaders/fs330.shader");
 
-	GLuint ballVBO, ballVAO,
-		   leftAxleVAO, leftAxleVBO, left4PointVAO, left4PointVBO, leftTipVAO, leftTipVBO, 
-		   rightAxleVAO, rightAxleVBO, right4PointVAO, right4PointVBO, rightTipVAO, rightTipVBO;
+	// OpenGL state
+	// ------------
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	// generate arrays and buffers
 	glGenVertexArrays(1, &ballVAO);
 	glGenBuffers(1, &ballVBO);
 	glGenVertexArrays(1, &leftAxleVAO);
@@ -195,36 +195,98 @@ int main(void)
 	}
 
 	gameState = BALL_DROPPING;
+	int pinHitIndex = Npins;
+	float timeStart = glfwGetTime();
 
 	// The main game loop
 	while (!glfwWindowShouldClose(window))
 	{
 		glClearColor(0.2, 0.5, 0.8, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
+
 		t = clock();
 
 		switch (gameState)
 		{
 			case START_MENU:
-				menu.Draw(shaderUtil);
+				RenderText(textShader, "Flipper: ", 25.0f, 570.0f, 0.4f, glm::vec4(0.5, 0.8f, 0.2f, 1.0f));
 				break;
 
 			default:
 				for (int p = 0; p < Npins; p++)
 				{
-					Render(circleVertices[p], 0, pinVAO[p], pinVBO[p], numberOfSides + 2);
+					if (p == pinHitIndex)
+					{
+						float timeValue = glfwGetTime() - timeStart;
+						float redValue = sin(timeValue * 50.0f) / timeValue;
+						ourShader.setVec4("baseColor", glm::vec4(redValue, 0.0f, 0.0f, 1.0f));
+					}
+					else
+					{
+						ourShader.setVec4("baseColor", glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+					}
+
+					//ourShader.setVec2("position", glm::vec2(pins[p][0], pins[p][1]));
+					Render(circleVertices[p], 0, pinVAO[p], pinVBO[p], numberOfSides + 2, ourShader);
 				}
 
-				Render(getCircleVertices(ball.getX(), ball.getY(), ball.getR(), numberOfSides), 0, ballVAO, ballVBO, numberOfSides + 2);
+				ourShader.setVec4("baseColor", glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-				Render(left.Get4PointsVertices(), 2, left4PointVAO, left4PointVBO, 4);
-				Render(left.GetPartCircleVertices(true), 0, leftAxleVAO, leftAxleVBO, (numberOfSides + 2) / 2);
-				Render(left.GetPartCircleVertices(false), 0, leftTipVAO, leftTipVBO, (numberOfSides + 2) / 2);
+				Render(ball.getBallCircleVertices(), 0, ballVAO, ballVBO, numberOfSides + 2, ourShader);
 
-			    Render(right.Get4PointsVertices(), 2, right4PointVAO, right4PointVBO, 4);
-				Render(right.GetPartCircleVertices(true), 0, rightAxleVAO, rightAxleVBO, (numberOfSides + 2) / 2);
-				Render(right.GetPartCircleVertices(false), 0, rightTipVAO, rightTipVBO, (numberOfSides + 2) / 2);
+				Render(left.Get4PointsVertices(), 0, left4PointVAO, left4PointVBO, 4, ourShader);
+				Render(left.GetPartCircleVertices(true), 0, leftAxleVAO, leftAxleVBO, (numberOfSides + 2) / 2, ourShader);
+				Render(left.GetPartCircleVertices(false), 0, leftTipVAO, leftTipVBO, (numberOfSides + 2) / 2, ourShader);
+
+			    Render(right.Get4PointsVertices(), 0, right4PointVAO, right4PointVBO, 4, ourShader);
+				Render(right.GetPartCircleVertices(true), 0, rightAxleVAO, rightAxleVBO, (numberOfSides + 2) / 2, ourShader);
+				Render(right.GetPartCircleVertices(false), 0, rightTipVAO, rightTipVBO, (numberOfSides + 2) / 2, ourShader);
+
+				RenderText(textShader, "Points: ", 25.0f, 570.0f, 0.4f, glm::vec4(0.5, 0.8f, 0.2f, 1.0f));
+
 				break;
+		}
+
+		GLfloat r = ball.getR();
+
+		// The simulation loop of the flipper game
+		for (int iter = 0; iter < (int)(Tfps / Ts); iter++)
+		{
+			if (gameState == FLIPPER)
+			{
+				GLfloat xPos = ball.getX();
+				GLfloat yPos = ball.getY();
+				GLfloat impulse;
+
+				for (int i = 0; i < Npins; i++)
+				{
+					if (ball.pinCollisionDetect(pins[i][0], pins[i][1], pinR))
+					{
+						timeStart = glfwGetTime();
+						pinHitIndex = i;
+						break;
+					}
+				}
+
+				if (!ball.wallCollisionDetect())
+				{
+					if (left.FlipperCollisionDetect(xPos, yPos, r))
+					{
+						ball.bounce(left.getNormal(), xPos, yPos, left.getDisplacement());
+						ball.hit(left.getImpulse(xPos, yPos), left.getNormal(), xPos, yPos);
+					}
+					else if (right.FlipperCollisionDetect(xPos, yPos, r))
+					{
+						ball.bounce(right.getNormal(), xPos, yPos, left.getDisplacement());
+						ball.hit(right.getImpulse(xPos, yPos), right.getNormal(), xPos, yPos);
+					}
+				}
+
+				ball.midair();
+
+				left.updateFlip();
+				right.updateFlip();
+			}
 		}
 
 		// Swap front and back buffers
@@ -233,87 +295,8 @@ int main(void)
 		// Poll for and process events
 		glfwPollEvents();
 
-		// The simulation loop of the flipper game
-		for (int iter = 0; iter < (int)(Tfps / Ts); iter++)
-		{
-			if (gameState == FLIPPER)
-			{
-				bool hit = false;
-				bool leftHit = false;
-				bool rightHit = false;
-				GLfloat xPos = ball.getX();
-				GLfloat yPos = ball.getY();
-				GLfloat r = ball.getR();
-				GLfloat impulse;
-				GLfloat x_bounce;
-				GLfloat y_bounce;
-
-				for (int i = 0; i < Npins; i++)
-				{
-					if (!hit)
-					{
-						hit = ball.pinCollisionDetect(pins[i][0], pins[i][1], pinR);
-					}
-				}
-
-				if (!hit)
-				{
-					hit = ball.wallCollisionDetect();
-				}
-
-				if (!hit)
-				{
-					d = left.getDistance(xPos, yPos);
-
-					if (d < r)
-					{
-						angleImpact = left.getAngle(xPos, yPos);
-						x_bounce = xPos + (r - d) * cos(angleImpact);
-						y_bounce = yPos + (r - d) * sin(angleImpact);
-						impulse = left.getImpulse(x_bounce, y_bounce);
-
-						if (impulse > 0)
-							ball.hit(impulse, x_bounce, y_bounce, angleImpact);
-						else
-							ball.bounce(angleImpact, x_bounce, y_bounce);
-						leftHit = true;
-					}
-				}
-
-				if (!hit || !leftHit)
-				{
-					d = right.getDistance(xPos, yPos);
-
-					if (d < r)
-					{
-						angleImpact = right.getAngle(xPos, yPos);
-						x_bounce = xPos + (r - d) * cos(angleImpact);
-						y_bounce = yPos + (r - d) * sin(angleImpact);
-						impulse = right.getImpulse(x_bounce, y_bounce);
-
-						if (impulse > 0)
-							ball.hit(impulse, x_bounce, y_bounce, angleImpact);
-						else
-							ball.bounce(angleImpact, x_bounce, y_bounce);
-						rightHit = true;
-					}
-				}
-
-				if (!hit || !leftHit || !rightHit)
-				{
-					ball.midair();
-				}
-
-				left.updateFlip(leftHit);
-				right.updateFlip(rightHit);
-			}
-		}
-
 		while (((float)(clock() - t) / CLOCKS_PER_SEC) < Tfps) {};
 	}
 
-	shaderUtil.Delete();
 	glfwTerminate();
 }
-
-

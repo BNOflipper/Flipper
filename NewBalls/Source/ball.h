@@ -1,11 +1,11 @@
 #pragma once
-#include <GL/glew.h>
 #include "Draw.h"
+#include <glad/glad.h>
 #include <math.h>
 #include "constants.h"
-#include "ShaderUtil.h"
-#include <iostream>
-
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 using namespace Const;
 
 class Ball 
@@ -18,11 +18,12 @@ class Ball
 	GLfloat y;
 	GLfloat r;
 	GLfloat A;
-	GLfloat tMidAir;
+	int numberOfSides;
 
 public:
 
-	Ball(GLfloat x_init, GLfloat y_init, GLfloat vx_init, GLfloat vy_init, GLfloat radius, GLfloat mass, GLfloat c_air, GLfloat a) 
+	Ball(GLfloat x_init, GLfloat y_init, GLfloat vx_init, GLfloat vy_init,
+		 GLfloat radius, GLfloat mass, GLfloat c_air, GLfloat a, int numberOfSides)
 	{
 		m = mass;
 		r = radius;
@@ -30,75 +31,47 @@ public:
 		y = y_init;
 		vx = vx_init;
 		vy = vy_init;
-		c = c_air;
+		c = c_air / mass;
 		A = a;
-		tMidAir = 0;
+		this->numberOfSides = numberOfSides;
 	}
 
 	void midair()
 	{
-		vy -= (Ts / m) * (c*vy + m * g);
-		vx -= Ts * c*vx / m;
+		vy -= Ts * (c*vy + g);
+		vx -= Ts * c*vx;
 
 		y += Ts * vy;
 		x += Ts * vx;
-
-		tMidAir += Ts;
 	}
 
-	void bounce(GLfloat theta, GLfloat x_bounce, GLfloat y_bounce)
+	void bounce(glm::vec2 normal, GLfloat x_bounce, GLfloat y_bounce, GLfloat displacement)
 	{
-		GLfloat v;
-		GLfloat rollAngle;
-		GLfloat ballDir = atan2(vy, vx);
-		GLfloat dirAngle = -ballDir + 2 * theta - Pi;
-		v = sqrt(pow(vx, 2) + pow(vy, 2));
-		vy = v * sin(dirAngle);
-		vx = v * cos(dirAngle);
+		glm::vec2 refl = A * glm::reflect(glm::vec2(vx, vy), normal);
+		vx = refl.x;
+		vy = refl.y;
 
-		if (tMidAir > 0.05f || theta < 0)
-		{
-			vy *= A;
-			vx *= A;
-		}
-		else
-		{
-			GLfloat F_roll = -0.01f * c;
-			if (theta <= halfPi)
-			{
-				rollAngle = theta - halfPi;
-			}
-			else
-			{
-				rollAngle = theta + halfPi;
-			}
-
-			vx += Ts / m * (F_roll*vx + m * g * cos(rollAngle) * fabs(sin(rollAngle)));
-			vy += Ts / m * (F_roll*vy + m * g * fabs(sin(rollAngle)) * sin(rollAngle));
-		}
-
-		x = x_bounce + Ts * vx;
-		y = y_bounce + Ts * vy;
-		tMidAir = 0;
+		glm::vec2 displacementVector = displacement * normal;
+		x += displacementVector.x;
+		y += displacementVector.y;;
 	}
 
-	void hit(GLfloat I, GLfloat theta, GLfloat x_bounce, GLfloat y_bounce)
+	void hit(GLfloat I, glm::vec2 normal, GLfloat x_bounce, GLfloat y_bounce)
 	{
-		vx = I*cos(theta) / m + vx;
-		vy = I*sin(theta) / m + vy;
-		x = x_bounce + Ts * vx;
-		y = y_bounce + Ts * vy;
-		tMidAir = 0;
+		vx = I * normal.x / m + vx;
+		vy = I * normal.y / m + vy;
 	}
 
 	bool pinCollisionDetect(GLfloat pinx, GLfloat piny, GLfloat pinr)
 	{
-		GLfloat d = sqrtf(powf(pinx - x, 2.0f) + powf(piny - y, 2.0f));
+		glm::vec2 normal(x - pinx, y - piny);
+		GLfloat normalLength = glm::length(normal);
 
-		if (d <= pinr + r)
+		if (normalLength < pinr + r)
 		{
-			GLfloat theta = atan2(y - piny, x - pinx);
-			bounce(theta, pinx + (pinr + r) * cos(theta), piny + (pinr + r)  * sin(theta));
+			GLfloat displacement = pinr + r - normalLength + 0.001f;
+			bounce(glm::normalize(normal), vx, vy, displacement);
+
 			return true;
 		}
 
@@ -107,30 +80,34 @@ public:
 
 	bool wallCollisionDetect()
 	{
-		GLfloat theta;
-		if (x <= r - 1.0f)
+		if (x < r - 1.0f)
 		{
-			theta = 0;
-			bounce(theta, r - 1.0f, y);
+			bounce(glm::vec2(1.0f, 0.0f), r - 1.0f, y, 0.001f);
 		}
-		else if (x >= 1.0f  - r)
+		else if (x > 1.0f  - r)
 		{
-			theta = Pi;
-			bounce(theta, 1.0f - r, y);
+			bounce(glm::vec2(-1.0f, 0.0f), 1.0f - r, y, 0.001f);
 		}
-		else if (y <= -1.0f + r)
+		else if (y < -1.0f + r)
 		{
-			gameState = DEAD;
+			//gameState = DEAD;
+			bounce(glm::vec2(0.0f, 1.0f), x, y, 0.001f);
 		}
-		else if (y >= 1.0f - r) {
-			theta = -Pi / 2.0f;
-			bounce(theta, x, 1.0f - r);
+		else if (y > 1.0f - r) 
+		{
+			bounce(glm::vec2(0.0f, -1.0f), x, 1.0f - r, 0.001f);
 		}
 		else
 		{
 			return false;
 		}
+
 		return true;
+	}
+
+	GLfloat * getBallCircleVertices()
+	{
+		return getCircleVertices(x, y, r, numberOfSides);
 	}
 
 	void AdjustDropPosition(GLfloat xAdj, GLfloat yAdj)
@@ -156,11 +133,9 @@ public:
 	{
 		return y;
 	}
+
 	GLfloat getR()
 	{
 		return r;
 	}
 };
-
-
-
